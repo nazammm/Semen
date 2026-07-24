@@ -7,10 +7,10 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { formatRupiahCompact } from "@/lib/format"
+import { formatTonCompact } from "@/lib/format"
 
 const config = {
-  omzet: { label: "Omzet", color: "var(--chart-1)" },
+  omzet: { label: "Tonase", color: "var(--chart-1)" },
 } satisfies ChartConfig
 
 export function BranchBarChart({
@@ -30,7 +30,7 @@ export function BranchBarChart({
           type="number"
           tickLine={false}
           axisLine={false}
-          tickFormatter={(v) => formatRupiahCompact(Number(v)).replace("Rp ", "")}
+          tickFormatter={(v) => formatTonCompact(Number(v))}
         />
         <YAxis
           type="category"
@@ -42,7 +42,7 @@ export function BranchBarChart({
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(value) => formatRupiahCompact(Number(value))}
+              formatter={(value) => formatTonCompact(Number(value))}
             />
           }
         />

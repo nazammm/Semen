@@ -1,5 +1,5 @@
 import { Card } from '@/components/ui/card'
-import { formatRupiahCompact } from '@/lib/format'
+import { formatTonCompact } from '@/lib/format'
 import { Trophy, Medal, Award } from 'lucide-react'
 import type { SalesmanRow } from '@/lib/queries'
 
@@ -60,10 +60,10 @@ export function TopPodium({ data }: { data: SalesmanRow[] }) {
             </div>
             <div className="mt-1 w-full space-y-1 border-t border-border pt-3">
               <p className={`text-xl font-bold ${meta.accent}`}>
-                {formatRupiahCompact(s.omzetTotal)}
+                {formatTonCompact(s.omzetTotal)}
               </p>
               <p className="text-xs text-muted-foreground">
-                {s.volumeTotal.toLocaleString('id-ID')} sak &middot;{' '}
+                {s.volumeTotal.toLocaleString('id-ID')} ton &middot;{' '}
                 {s.storesHandled} toko
               </p>
             </div>

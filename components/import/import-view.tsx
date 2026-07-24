@@ -27,44 +27,44 @@ const SHEETS: {
 }[] = [
   {
     key: "branches",
-    sheet: "Cabang",
-    headers: ["nama", "provinsi", "kota", "lat", "lng"],
-    example: ["Cabang Jakarta", "DKI Jakarta", "Jakarta", -6.2088, 106.8456],
-    aliases: ["cabang", "branch", "branches"],
+    sheet: "Distributor",
+    headers: ["Dist Code", "Dist Name", "Target TA Jul", "TA Jul", "Target Tonase Jul", "Tonase Jul"],
+    example: ["NC", "PT NIAGAPRATAMA CEMERLANG", 20, 18, 1000, 900],
+    aliases: ["distributor", "dist", "branches", "cabang"],
   },
   {
     key: "products",
     sheet: "Produk",
-    headers: ["nama", "kategori", "satuan", "harga"],
-    example: ["Semen PCC 40kg", "Portland Composite", "sak", 65000],
+    headers: ["nama", "Kode", "Jenis"],
+    example: ["PCC@50KG", "CMT002", "STR"],
     aliases: ["produk", "product", "products", "barang"],
   },
   {
     key: "salesmen",
     sheet: "Sales",
-    headers: ["nama", "cabang", "telepon", "aktif"],
-    example: ["Andi Pratama", "Cabang Jakarta", "0812-1000-0001", "ya"],
+    headers: ["Kode Sales", "Nama", "Dist Code", "Target Toko Aktif", "Toko Aktif (MTD)"],
+    example: ["BKP015", "HASYIM ROIS", "BKP", 9, 12],
     aliases: ["sales", "salesman", "salesmen", "salesperson"],
   },
   {
     key: "stores",
     sheet: "Toko",
-    headers: ["nama", "pemilik", "alamat", "provinsi", "kota", "lat", "lng", "status", "sales", "cabang", "tanggal_order_terakhir"],
-    example: ["TB Sinar Jaya", "H. Rahmat", "Jl. Mangga Besar No.12", "DKI Jakarta", "Jakarta Barat", -6.149, 106.813, "aktif", "Andi Pratama", "Cabang Jakarta", "2026-07-20"],
+    headers: ["Kode Toko", "nama", "alamat", "Distributor", "kota", "lat", "lng", "status", "MTD sales Code", "tanggal_order_terakhir"],
+    example: ["13723", "SETIA BANGUNAN", "JL. BRIGJEND KATAMSO", "KTP", "KETAPANG", -1.8161993, 109.9792225, "aktif", "KTP035", "2026-07-20"],
     aliases: ["toko", "store", "stores", "outlet"],
   },
   {
     key: "stock",
-    sheet: "Stok",
-    headers: ["cabang", "produk", "jumlah"],
-    example: ["Cabang Jakarta", "Semen PCC 40kg", 2500],
-    aliases: ["stok", "stock", "inventory", "persediaan"],
+    sheet: "Gudang",
+    headers: ["Gudang", "produk", "Lat", "long", "Stock"],
+    example: ["Way-Lunik", "Semen PCC 40kg", -6.2088, 106.8456, 1000],
+    aliases: ["gudang", "stock", "inventory", "persediaan"],
   },
   {
     key: "sales",
     sheet: "Transaksi",
-    headers: ["sales", "toko", "produk", "jumlah", "nilai", "tanggal"],
-    example: ["Andi Pratama", "TB Sinar Jaya", "Semen PCC 40kg", 150, "", "2026-07-18"],
+    headers: ["Dist Code", "Distributor Name", "DO Date", "DO No.", "Payment", "Customer Code", "Delivery Type", "Product Code", "Tonase", "tdSalesmanCode"],
+    example: ["KTP", "PT. PRIMA TERANG KENCANA", "2026-06-02", 2600628, "KREDIT 30 HARI", "7298", "FRANCO FLOOR", "RJW003", 2, "KTP035"],
     aliases: ["transaksi", "penjualan", "sale", "sales", "transactions"],
   },
 ]
@@ -92,14 +92,14 @@ export function ImportView() {
       [""],
       ["1. Isi tiap sheet sesuai kolom yang tersedia. Jangan ubah nama kolom (baris pertama)."],
       ["2. Baris contoh boleh dihapus atau ditimpa dengan data asli Anda."],
-      ["3. Kolom 'lat' dan 'lng' adalah koordinat GPS (desimal). Contoh: -6.2088 dan 106.8456."],
-      ["4. Kolom relasi (cabang, sales, produk, toko) diisi dengan NAMA persis seperti di sheet terkait."],
-      ["5. Sheet 'Transaksi' kolom 'nilai' boleh dikosongkan — otomatis dihitung dari jumlah x harga produk."],
-      ["6. Kolom 'status' toko: isi 'aktif' atau 'non-aktif'. Kolom 'aktif' sales: 'ya' atau 'tidak'."],
+      ["3. Kolom lat/lng adalah koordinat GPS (desimal). Contoh: -6.2088 dan 106.8456."],
+      ["4. Kolom relasi (Distributor, Sales, Produk, Toko, Gudang) diisi dengan nama/kode persis seperti sheet terkait."],
+      ["5. Sheet Transaksi memakai kolom tonase dan kode salesman/produk/distributor yang sesuai dengan sheet lain."],
+      ["6. Kolom status toko: isi 'aktif' atau 'non-aktif'."],
       ["7. Tanggal format YYYY-MM-DD (contoh 2026-07-20)."],
       ["8. Anda boleh mengisi sebagian sheet saja; sheet kosong akan dilewati."],
       [""],
-      ["Urutan yang disarankan: Cabang -> Produk -> Sales -> Toko -> Stok -> Transaksi"],
+      ["Urutan yang disarankan: Distributor -> Produk -> Sales -> Toko -> Gudang -> Transaksi"],
     ]
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(petunjuk), "Petunjuk")
 
@@ -147,7 +147,7 @@ export function ImportView() {
 
       if (Object.keys(newCounts).length === 0) {
         setParseError(
-          "Tidak ada sheet yang cocok ditemukan. Pastikan nama sheet: Cabang, Produk, Sales, Toko, Stok, Transaksi.",
+          "Tidak ada sheet yang cocok ditemukan. Pastikan nama sheet: Distributor, Produk, Sales, Toko, Gudang, Transaksi.",
         )
         setPayload(null)
         setCounts({})
@@ -196,8 +196,8 @@ export function ImportView() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Template berisi 6 sheet (Cabang, Produk, Sales, Toko, Stok, Transaksi) lengkap dengan kolom dan contoh
-              pengisian. Referensi antar tabel cukup pakai <strong className="text-foreground">nama</strong>, bukan ID.
+              Template berisi 6 sheet (Distributor, Produk, Sales, Toko, Gudang, Transaksi) lengkap dengan kolom dan contoh
+              pengisian. Referensi antar tabel cukup pakai <strong className="text-foreground">kode atau nama</strong>, bukan ID.
             </p>
             <Button onClick={downloadTemplate} variant="outline" className="gap-2 bg-transparent">
               <Download className="h-4 w-4" />

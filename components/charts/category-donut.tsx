@@ -7,7 +7,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { formatRupiahCompact } from "@/lib/format"
+import { formatTonCompact } from "@/lib/format"
 
 const COLORS = [
   "var(--chart-1)",
@@ -38,7 +38,7 @@ export function CategoryDonut({
                 formatter={(value, name) => (
                   <div className="flex flex-col">
                     <span className="text-muted-foreground">{name}</span>
-                    <span className="font-medium">{formatRupiahCompact(Number(value))}</span>
+                    <span className="font-medium">{formatTonCompact(Number(value))}</span>
                   </div>
                 )}
               />
@@ -65,14 +65,14 @@ export function CategoryDonut({
                         y={(viewBox.cy ?? 0) - 6}
                         className="fill-foreground text-base font-semibold"
                       >
-                        {formatRupiahCompact(total).replace("Rp ", "")}
+                        {formatTonCompact(total)}
                       </tspan>
                       <tspan
                         x={viewBox.cx}
                         y={(viewBox.cy ?? 0) + 14}
                         className="fill-muted-foreground text-xs"
                       >
-                        Total Omzet
+                        Total Tonase
                       </tspan>
                     </text>
                   )

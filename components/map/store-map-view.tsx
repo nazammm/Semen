@@ -7,7 +7,7 @@ import type { StoreRow, BranchPoint } from "@/lib/queries"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { formatDate, formatRupiahCompact } from "@/lib/format"
+import { formatDate, formatTonCompact } from "@/lib/format"
 
 const LeafletMap = dynamic(() => import("./leaflet-map"), {
   ssr: false,
@@ -150,7 +150,7 @@ export function StoreMapView({
                     Sales: {s.salesman ?? "-"} · Order terakhir: {formatDate(s.lastOrderDate)}
                   </p>
                   <p className="text-xs font-medium text-foreground/80">
-                    {formatRupiahCompact(s.omzetTotal)}
+                    {formatTonCompact(s.omzetTotal)}
                   </p>
                 </div>
               </div>

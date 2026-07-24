@@ -17,7 +17,7 @@ export function DistributionProvinceChart({ data }: { data: Row[] }) {
 
   return (
     <ChartContainer
-      config={{ volume: { label: 'Volume (sak)', color: 'var(--chart-1)' } }}
+      config={{ volume: { label: 'Volume (ton)', color: 'var(--chart-1)' } }}
       className="h-[320px] w-full"
     >
       <BarChart accessibilityLayer data={chartData} margin={{ top: 8 }}>
@@ -36,12 +36,12 @@ export function DistributionProvinceChart({ data }: { data: Row[] }) {
           tickLine={false}
           axisLine={false}
           tick={{ fontSize: 11 }}
-          tickFormatter={(v) => `${(v / 1000).toFixed(0)}rb`}
+          tickFormatter={(v) => `${(v / 1000).toFixed(0)}rb ton`}
         />
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(v) => `${Number(v).toLocaleString('id-ID')} sak`}
+              formatter={(v) => `${Number(v).toLocaleString('id-ID')} ton`}
             />
           }
         />

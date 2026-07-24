@@ -13,7 +13,7 @@ import {
   getSalesByCategory,
   getSalesmenRanking,
 } from "@/lib/queries"
-import { formatNumber, formatRupiahCompact } from "@/lib/format"
+import { formatNumber, formatTonCompact } from "@/lib/format"
 
 export const dynamic = "force-dynamic"
 
@@ -48,17 +48,17 @@ export default async function OverviewPage() {
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Omzet Bulan Ini"
-          value={formatRupiahCompact(kpi.omzetThisMonth)}
+          label="Tonase Bulan Ini"
+          value={formatTonCompact(kpi.omzetThisMonth)}
           icon={Coins}
           trend={growth}
           sub="vs bulan lalu"
         />
         <StatCard
-          label="Volume Terjual (Bln Ini)"
-          value={`${formatNumber(kpi.volumeThisMonth)} unit`}
+          label="Tonase Terjual (Bln Ini)"
+          value={`${formatNumber(kpi.volumeThisMonth)} ton`}
           icon={Package}
-          sub="sak + ton"
+          sub="pantauan bulanan"
         />
         <StatCard
           label="Toko Aktif"
@@ -77,8 +77,8 @@ export default async function OverviewPage() {
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Tren Omzet 6 Bulan Terakhir</CardTitle>
-            <CardDescription>Total nilai penjualan seluruh cabang per bulan</CardDescription>
+            <CardTitle>Tren Tonase 6 Bulan Terakhir</CardTitle>
+            <CardDescription>Total tonase penjualan seluruh cabang per bulan</CardDescription>
           </CardHeader>
           <CardContent>
             <OmzetTrendChart data={monthly} />
@@ -88,7 +88,7 @@ export default async function OverviewPage() {
         <Card>
           <CardHeader>
             <CardTitle>Komposisi per Kategori</CardTitle>
-            <CardDescription>Distribusi omzet berdasarkan jenis semen</CardDescription>
+            <CardDescription>Distribusi tonase berdasarkan jenis semen</CardDescription>
           </CardHeader>
           <CardContent>
             <CategoryDonut data={byCategory} />
@@ -113,7 +113,7 @@ export default async function OverviewPage() {
               <Building2 className="h-4 w-4 text-primary" />
               Top 5 Salesman
             </CardTitle>
-            <CardDescription>Berdasarkan total omzet</CardDescription>
+            <CardDescription>Berdasarkan total tonase</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {topSales.map((s, i) => (
@@ -126,7 +126,7 @@ export default async function OverviewPage() {
                     <span className="truncate font-medium">{s.name}</span>
                   </div>
                   <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {formatRupiahCompact(s.omzetTotal)}
+                    {formatTonCompact(s.omzetTotal)}
                   </span>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
