@@ -7,10 +7,10 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { formatRupiahCompact } from "@/lib/format"
+import { formatTonCompact } from "@/lib/format"
 
 const config = {
-  omzet: { label: "Omzet", color: "var(--chart-1)" },
+  omzet: { label: "Tonase", color: "var(--chart-1)" },
 } satisfies ChartConfig
 
 export function OmzetTrendChart({
@@ -33,12 +33,12 @@ export function OmzetTrendChart({
           tickLine={false}
           axisLine={false}
           width={54}
-          tickFormatter={(v) => formatRupiahCompact(Number(v)).replace("Rp ", "")}
+          tickFormatter={(v) => formatTonCompact(Number(v))}
         />
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(value) => formatRupiahCompact(Number(value))}
+              formatter={(value) => formatTonCompact(Number(value))}
             />
           }
         />

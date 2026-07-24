@@ -7,7 +7,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { formatRupiah } from '@/lib/format'
+import { formatTon } from '@/lib/format'
 import type { SalesmanRow } from '@/lib/queries'
 
 export function SalesRankingTable({ data }: { data: SalesmanRow[] }) {
@@ -21,9 +21,9 @@ export function SalesRankingTable({ data }: { data: SalesmanRow[] }) {
             <TableHead className="w-12">#</TableHead>
             <TableHead>Nama Sales</TableHead>
             <TableHead>Cabang</TableHead>
-            <TableHead className="text-right">Omzet Total</TableHead>
+            <TableHead className="text-right">Tonase Total</TableHead>
             <TableHead className="hidden text-right md:table-cell">
-              Volume (sak)
+              Volume (ton)
             </TableHead>
             <TableHead className="hidden text-right sm:table-cell">
               Toko
@@ -54,10 +54,10 @@ export function SalesRankingTable({ data }: { data: SalesmanRow[] }) {
                   {s.branch}
                 </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">
-                  {formatRupiah(s.omzetTotal)}
+                  {formatTon(s.omzetTotal)}
                 </TableCell>
                 <TableCell className="hidden text-right tabular-nums text-muted-foreground md:table-cell">
-                  {s.volumeTotal.toLocaleString('id-ID')}
+                  {s.volumeTotal.toLocaleString('id-ID')} ton
                 </TableCell>
                 <TableCell className="hidden text-right sm:table-cell">
                   <Badge variant="secondary">{s.storesHandled}</Badge>

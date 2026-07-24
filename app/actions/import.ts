@@ -1,6 +1,6 @@
 "use server"
 
-import { db } from "@/lib/db"
+import { db, pool } from "@/lib/db"
 import { branches, salesmen, products, stores, stock, sales } from "@/lib/db/schema"
 import { revalidatePath } from "next/cache"
 
@@ -56,8 +56,95 @@ const norm = (v: unknown) => (str(v) ?? "").toLowerCase()
 
 /* ------------------------------ clear all ------------------------------- */
 
+function hasDatabaseConfig(): boolean {
+  return Boolean(
+    process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.POSTGRES_PRISMA_URL ?? process.env.POSTGRES_URL_NO_SSL,
+  )
+}
+
+async function ensureDatabaseSchema(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS branches (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      province TEXT NOT NULL,
+      city TEXT NOT NULL,
+      lat DOUBLE PRECISION NOT NULL,
+      lng DOUBLE PRECISION NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS salesmen (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      branch_id INTEGER NOT NULL,
+      phone TEXT,
+      join_date DATE,
+      active BOOLEAN DEFAULT TRUE
+    )
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      unit TEXT NOT NULL DEFAULT 'sak',
+      price INTEGER NOT NULL DEFAULT 0
+    )
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS stores (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      owner TEXT,
+      address TEXT,
+      province TEXT NOT NULL,
+      city TEXT NOT NULL,
+      lat DOUBLE PRECISION NOT NULL,
+      lng DOUBLE PRECISION NOT NULL,
+      status TEXT NOT NULL DEFAULT 'aktif',
+      salesman_id INTEGER,
+      branch_id INTEGER,
+      last_order_date DATE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS stock (
+      id SERIAL PRIMARY KEY,
+      branch_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales (
+      id SERIAL PRIMARY KEY,
+      salesman_id INTEGER NOT NULL,
+      store_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL,
+      amount BIGINT NOT NULL,
+      sale_date DATE NOT NULL
+    )
+  `)
+}
+
 export async function clearAllData(): Promise<{ ok: boolean; error?: string }> {
   try {
+    if (!hasDatabaseConfig()) {
+      return { ok: false, error: "DATABASE_URL belum dikonfigurasi. Hubungkan database terlebih dahulu agar import bisa dijalankan." }
+    }
+
+    await ensureDatabaseSchema()
+
     // Delete in FK-safe order (no FKs, but keep it logical).
     await db.delete(sales)
     await db.delete(stock)
@@ -86,21 +173,39 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
   }
 
   try {
+    if (!hasDatabaseConfig()) {
+      return {
+        ok: false,
+        cleared: false,
+        inserted,
+        warnings,
+        error: "DATABASE_URL belum dikonfigurasi. Import hanya bisa dijalankan setelah database terhubung.",
+      }
+    }
+
+    await ensureDatabaseSchema()
+
     if (clearFirst) {
       const c = await clearAllData()
       if (!c.ok) return { ok: false, cleared: false, inserted, warnings, error: c.error }
     }
 
-    // 1) Branches
+    // 1) Branches / distributors
+    const branchCodeMap = new Map<string, string>()
     if (payload.branches?.length) {
       const rows = payload.branches
-        .map((r) => ({
-          name: str(r.nama ?? r.name),
-          province: str(r.provinsi ?? r.province) ?? "",
-          city: str(r.kota ?? r.city) ?? "",
-          lat: num(r.lat ?? r.latitude),
-          lng: num(r.lng ?? r.longitude ?? r.long),
-        }))
+        .map((r) => {
+          const name = str(r.dist_name ?? r.nama ?? r.name)
+          const code = str(r.dist_code ?? r["dist code"] ?? r.code)
+          if (code && name) branchCodeMap.set(code.toLowerCase(), name)
+          return {
+            name,
+            province: str(r.provinsi ?? r.province) ?? "",
+            city: str(r.kota ?? r.city) ?? "",
+            lat: num(r.lat ?? r.latitude),
+            lng: num(r.lng ?? r.longitude ?? r.long),
+          }
+        })
         .filter((r) => r.name && r.lat !== null && r.lng !== null) as {
         name: string
         province: string
@@ -118,14 +223,20 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
     }
 
     // 2) Products
+    const productCodeMap = new Map<string, string>()
     if (payload.products?.length) {
       const rows = payload.products
-        .map((r) => ({
-          name: str(r.nama ?? r.name),
-          category: str(r.kategori ?? r.category) ?? "Umum",
-          unit: str(r.satuan ?? r.unit) ?? "sak",
-          price: num(r.harga ?? r.price) ?? 0,
-        }))
+        .map((r) => {
+          const name = str(r.nama ?? r.name)
+          const code = str(r.kode ?? r["product code"] ?? r.product_code)
+          if (code && name) productCodeMap.set(code.toLowerCase(), name)
+          return {
+            name,
+            category: str(r.kategori ?? r.category ?? r.jenis) ?? "Umum",
+            unit: str(r.satuan ?? r.unit) ?? "sak",
+            price: num(r.harga ?? r.price) ?? 0,
+          }
+        })
         .filter((r) => r.name) as { name: string; category: string; unit: string; price: number }[]
       if (rows.length) {
         await db.insert(products).values(rows)
@@ -147,16 +258,21 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
     }
 
     // 3) Salesmen
+    const salesmanCodeMap = new Map<string, string>()
     if (payload.salesmen?.length) {
       const rows = payload.salesmen
         .map((r) => {
           const name = str(r.nama ?? r.name)
-          const branchId = branchMap.get(norm(r.cabang ?? r.branch))
-          const aktif = norm(r.aktif ?? r.active)
+          const code = str(r["kode sales"] ?? r.kode_sales ?? r.code)
+          const branchCode = str(r.dist_code ?? r["dist code"])
+          const branchName = branchCodeMap.get(norm(branchCode ?? "")) ?? str(r.dist_name ?? r.distributor ?? r.cabang ?? r.branch)
+          const branchId = branchMap.get(norm(branchName ?? ""))
+          const aktif = norm(r.aktif ?? r.active ?? r["toko aktif (mtd)"])
+          if (code && name) salesmanCodeMap.set(code.toLowerCase(), name)
           return {
             name,
             branchId,
-            phone: str(r.telepon ?? r.phone ?? r.hp),
+            phone: str(code ?? r.telepon ?? r.phone ?? r.hp),
             active: aktif === "" ? true : !["tidak", "non-aktif", "nonaktif", "false", "0", "no"].includes(aktif),
           }
         })
@@ -179,15 +295,21 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
 
     // 4) Stores
     const salesmanMap = new Map<string, number>()
-    for (const s of await db.select({ id: salesmen.id, name: salesmen.name }).from(salesmen)) {
+    for (const s of await db.select({ id: salesmen.id, name: salesmen.name, phone: salesmen.phone }).from(salesmen)) {
       salesmanMap.set(s.name.toLowerCase(), s.id)
+      if (s.phone) salesmanMap.set(s.phone.toLowerCase(), s.id)
     }
     if (payload.stores?.length) {
       const rows = payload.stores
         .map((r) => {
           const st = norm(r.status)
+          const salesmanCode = str(r["mtd sales code"] ?? r["mtd sales"] ?? r.sales ?? r.salesman ?? r["kode sales"])
+          const branchRef = str(r.distributor ?? r.dist_name ?? r["dist name"] ?? r.dist_code ?? r["dist code"] ?? r.cabang ?? r.branch)
+          const salesmanName = salesmanCode ? salesmanCodeMap.get(salesmanCode.toLowerCase()) : null
+          const branchKey = norm(branchRef ?? "")
+          const branchId = branchMap.get(branchKey) ?? branchMap.get(norm(branchCodeMap.get(branchKey) ?? "")) ?? null
           return {
-            name: str(r.nama ?? r.name),
+            name: str(r.nama ?? r.name ?? r["kode toko"]),
             owner: str(r.pemilik ?? r.owner),
             address: str(r.alamat ?? r.address),
             province: str(r.provinsi ?? r.province) ?? "",
@@ -195,8 +317,8 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
             lat: num(r.lat ?? r.latitude),
             lng: num(r.lng ?? r.longitude ?? r.long),
             status: ["non-aktif", "nonaktif", "tidak aktif", "tidak", "inactive"].includes(st) ? "non-aktif" : "aktif",
-            salesmanId: salesmanMap.get(norm(r.sales ?? r.salesman)) ?? null,
-            branchId: branchMap.get(norm(r.cabang ?? r.branch)) ?? null,
+            salesmanId: salesmanMap.get(norm(salesmanName ?? salesmanCode ?? r.sales ?? r.salesman)) ?? null,
+            branchId,
             lastOrderDate: toDate(r.tanggal_order_terakhir ?? r.last_order_date ?? r["tanggal order terakhir"]),
           }
         })
@@ -222,14 +344,21 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
       }
     }
 
-    // 5) Stock
+    // 5) Stock / gudang
     if (payload.stock?.length) {
       const rows = payload.stock
-        .map((r) => ({
-          branchId: branchMap.get(norm(r.cabang ?? r.branch)),
-          productId: productMap.get(norm(r.produk ?? r.product)),
-          quantity: num(r.jumlah ?? r.quantity ?? r.stok) ?? 0,
-        }))
+        .map((r) => {
+          const branchRef = str(r.gudang ?? r.cabang ?? r.branch ?? r.distributor ?? r.dist_name)
+          const branchKey = norm(branchRef ?? "")
+          const branchId = branchMap.get(branchKey) ?? branchMap.get(norm(branchCodeMap.get(branchKey) ?? "")) ?? null
+          const productRef = str(r.produk ?? r.product ?? r.nama)
+          const productId = productMap.get(norm(productRef ?? "")) ?? productMap.get(norm(productCodeMap.get(norm(productRef ?? "")) ?? "")) ?? null
+          return {
+            branchId,
+            productId,
+            quantity: num(r.stock ?? r.jumlah ?? r.quantity ?? r.stok) ?? 0,
+          }
+        })
         .filter((r) => r.branchId && r.productId) as {
         branchId: number
         productId: number
@@ -246,7 +375,7 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
       }
     }
 
-    // 6) Sales
+    // 6) Sales / transaksi
     const storeMap = new Map<string, number>()
     for (const s of await db.select({ id: stores.id, name: stores.name }).from(stores)) {
       storeMap.set(s.name.toLowerCase(), s.id)
@@ -258,17 +387,22 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
     if (payload.sales?.length) {
       const rows = payload.sales
         .map((r) => {
-          const productId = productMap.get(norm(r.produk ?? r.product))
-          const quantity = num(r.jumlah ?? r.quantity ?? r.qty) ?? 0
-          const explicitAmount = num(r.nilai ?? r.amount ?? r.omzet)
+          const productRef = str(r["product code"] ?? r.product_code ?? r.produk ?? r.product ?? r.kode)
+          const productName = productCodeMap.get(norm(productRef ?? "")) ?? productRef ?? ""
+          const productId = productMap.get(norm(productName))
+          const quantity = num(r.tonase ?? r.jumlah ?? r.quantity ?? r.qty ?? r.total_tonase) ?? 0
+          const explicitAmount = num(r.nilai ?? r.amount ?? r.omzet ?? r.tonase)
           const price = productId ? (priceMap.get(productId) ?? 0) : 0
+          const salesmanCode = str(r.tdsalesmancode ?? r["tdsalesmancode"] ?? r.sales ?? r.salesman ?? r["sales code"])
+          const salesmanId = salesmanMap.get(norm(salesmanCode ?? "")) ?? salesmanMap.get(norm(salesmanCodeMap.get(norm(salesmanCode ?? "")) ?? "")) ?? null
+          const storeRef = str(r.toko ?? r.store ?? r["customer code"] ?? r["customer"] ?? r.nama)
           return {
-            salesmanId: salesmanMap.get(norm(r.sales ?? r.salesman)),
-            storeId: storeMap.get(norm(r.toko ?? r.store)),
+            salesmanId,
+            storeId: storeMap.get(norm(storeRef ?? "")) ?? null,
             productId,
             quantity,
             amount: explicitAmount ?? quantity * price,
-            saleDate: toDate(r.tanggal ?? r.sale_date ?? r.date) ?? new Date().toISOString().slice(0, 10),
+            saleDate: toDate(r["do date"] ?? r.tanggal ?? r.sale_date ?? r.date ?? r["tanggal order terakhir"]) ?? new Date().toISOString().slice(0, 10),
           }
         })
         .filter((r) => r.salesmanId && r.storeId && r.productId && r.quantity > 0) as {

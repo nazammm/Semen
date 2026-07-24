@@ -3,7 +3,7 @@
 import "leaflet/dist/leaflet.css"
 import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip } from "react-leaflet"
 import type { StoreRow, BranchPoint } from "@/lib/queries"
-import { formatDate, formatRupiahCompact } from "@/lib/format"
+import { formatDate, formatTonCompact } from "@/lib/format"
 
 export default function LeafletMap({
   stores,
@@ -81,7 +81,7 @@ export default function LeafletMap({
                 <p className="text-xs">Sales: {s.salesman ?? "-"}</p>
                 <p className="text-xs">Cabang: {s.branch ?? "-"}</p>
                 <p className="text-xs">Order terakhir: {formatDate(s.lastOrderDate)}</p>
-                <p className="text-xs">Total omzet: {formatRupiahCompact(s.omzetTotal)}</p>
+                <p className="text-xs">Total tonase: {formatTonCompact(s.omzetTotal)}</p>
               </div>
             </Popup>
           </CircleMarker>

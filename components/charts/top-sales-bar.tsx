@@ -13,7 +13,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart'
-import { formatRupiahCompact } from '@/lib/format'
+import { formatTonCompact } from '@/lib/format'
 
 type Row = { name: string; omzetTotal: number }
 
@@ -27,7 +27,7 @@ export function TopSalesBar({ data }: { data: Row[] }) {
   return (
     <ChartContainer
       config={{
-        omzet: { label: 'Omzet', color: 'var(--chart-1)' },
+        omzet: { label: 'Tonase', color: 'var(--chart-1)' },
       }}
       className="h-[340px] w-full"
     >
@@ -49,7 +49,7 @@ export function TopSalesBar({ data }: { data: Row[] }) {
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(v) => formatRupiahCompact(Number(v))}
+              formatter={(v) => formatTonCompact(Number(v))}
               labelKey="fullName"
             />
           }
@@ -66,7 +66,7 @@ export function TopSalesBar({ data }: { data: Row[] }) {
             position="right"
             className="fill-muted-foreground"
             fontSize={11}
-            formatter={(v: number) => formatRupiahCompact(v)}
+            formatter={(v: number) => formatTonCompact(v)}
           />
         </Bar>
       </BarChart>

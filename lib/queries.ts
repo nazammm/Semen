@@ -88,8 +88,14 @@ const fallbackDistributionByProvince = [
   { province: "Jawa Timur", volume: 7700, omzet: 266000000 },
 ]
 
+const dbConnectionString =
+  process.env.DATABASE_URL ??
+  process.env.POSTGRES_URL ??
+  process.env.POSTGRES_PRISMA_URL ??
+  process.env.POSTGRES_URL_NO_SSL
+
 async function query<T = any>(text: string, params: any[] = []): Promise<T[]> {
-  if (!process.env.DATABASE_URL) return [] as T[]
+  if (!dbConnectionString) return [] as T[]
 
   try {
     const res = await pool.query(text, params)

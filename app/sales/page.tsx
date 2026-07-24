@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { getSalesmenRanking } from '@/lib/queries'
-import { formatRupiahCompact } from '@/lib/format'
+import { formatTonCompact } from '@/lib/format'
 import { Users, TrendingUp, Store } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -32,7 +32,7 @@ export default async function SalesPage() {
     <div className="flex flex-col">
       <PageHeader
         title="Performa Sales"
-        description="Ranking salesman berdasarkan kontribusi omzet ke seluruh cabang."
+        description="Ranking salesman berdasarkan kontribusi tonase ke seluruh cabang."
       />
       <div className="flex flex-col gap-6 p-4 md:p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -43,8 +43,8 @@ export default async function SalesPage() {
             sub="Tersebar di seluruh cabang"
           />
           <StatCard
-            label="Rata-rata Omzet / Sales"
-            value={formatRupiahCompact(avgOmzet)}
+            label="Rata-rata Tonase / Sales"
+            value={formatTonCompact(avgOmzet)}
             icon={TrendingUp}
             sub="Kontribusi rata-rata per orang"
           />
@@ -68,7 +68,7 @@ export default async function SalesPage() {
             <CardHeader>
               <CardTitle>10 Sales Teratas</CardTitle>
               <CardDescription>
-                Berdasarkan total omzet sepanjang periode.
+                Berdasarkan total tonase sepanjang periode.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -81,7 +81,7 @@ export default async function SalesPage() {
               <CardTitle>Papan Peringkat Lengkap</CardTitle>
               <CardDescription>
                 {topPerformer
-                  ? `${topPerformer.name} memimpin dengan ${formatRupiahCompact(topPerformer.omzetTotal)}.`
+                  ? `${topPerformer.name} memimpin dengan ${formatTonCompact(topPerformer.omzetTotal)}.`
                   : 'Belum ada data.'}
               </CardDescription>
             </CardHeader>
