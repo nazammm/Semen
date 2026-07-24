@@ -1,0 +1,20 @@
+BUG ANALYSIS:
+
+1. BRANCHES (Distributor): Template ga punya kolom province, city, lat, lng
+   - Kode butuh lat/lng untuk filter → semua baris ke-filter out
+   - Akibat: 0 cabang masuk → branchMap kosong → cascade failure
+
+2. STORES (Toko): Template ga punya kolom province
+   - Schema require province, tapi column ga ada
+
+3. SALES (Transaksi): Key lookup mismatch
+   - "Customer Code" → normalize → "customer_code"
+   - Kode cari: r["customer code"] (dengan spasi) → TIDAK KETEMU
+   - "DO Date" → normalize → "do_date"
+   - Kode cari: r["do date"] (dengan spasi) → TIDAK KETEMU
+
+4. STORES: "MTD sales Code" → normalize → "mtd_sales_code"
+   - Kode cari: r["mtd sales code"] (dengan spasi) → TIDAK KETEMU
+
+ROOT CAUSE: normalizeKey() ganti spasi jadi underscore, tapi kode import masih cari pake spasi
+

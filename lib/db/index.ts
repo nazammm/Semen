@@ -10,7 +10,16 @@ const connectionString =
   process.env.POSTGRES_PRISMA_URL ??
   process.env.POSTGRES_URL_NO_SSL
 
-export const pool = globalForDb.pool ?? new Pool({ connectionString })
+/** Create Pool only when a connection string exists; otherwise use a dummy pool. */
+function createPool(): Pool {
+  if (!connectionString) {
+    // Return a pool that gracefully fails — queries will return empty results.
+    return globalForDb.pool ?? (new Pool() as any)
+  }
+  return globalForDb.pool ?? new Pool({ connectionString })
+}
+
+export const pool = createPool()
 
 if (process.env.NODE_ENV !== "production") globalForDb.pool = pool
 

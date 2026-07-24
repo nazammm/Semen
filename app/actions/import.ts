@@ -190,23 +190,23 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
       if (!c.ok) return { ok: false, cleared: false, inserted, warnings, error: c.error }
     }
 
-    // 1) Branches / distributors
+// 1) Branches / distributors
     const branchCodeMap = new Map<string, string>()
     if (payload.branches?.length) {
       const rows = payload.branches
         .map((r) => {
           const name = str(r.dist_name ?? r.nama ?? r.name)
-          const code = str(r.dist_code ?? r["dist code"] ?? r.code)
+          const code = str(r.dist_code ?? r.code)
           if (code && name) branchCodeMap.set(code.toLowerCase(), name)
           return {
             name,
             province: str(r.provinsi ?? r.province) ?? "",
             city: str(r.kota ?? r.city) ?? "",
-            lat: num(r.lat ?? r.latitude),
-            lng: num(r.lng ?? r.longitude ?? r.long),
+            lat: num(r.lat ?? r.latitude) ?? 0,
+            lng: num(r.lng ?? r.longitude ?? r.long) ?? 0,
           }
         })
-        .filter((r) => r.name && r.lat !== null && r.lng !== null) as {
+        .filter((r) => r.name) as {
         name: string
         province: string
         city: string
@@ -222,13 +222,13 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
       }
     }
 
-    // 2) Products
+// 2) Products
     const productCodeMap = new Map<string, string>()
     if (payload.products?.length) {
       const rows = payload.products
         .map((r) => {
           const name = str(r.nama ?? r.name)
-          const code = str(r.kode ?? r["product code"] ?? r.product_code)
+          const code = str(r.kode ?? r.product_code)
           if (code && name) productCodeMap.set(code.toLowerCase(), name)
           return {
             name,
@@ -263,11 +263,11 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
       const rows = payload.salesmen
         .map((r) => {
           const name = str(r.nama ?? r.name)
-          const code = str(r["kode sales"] ?? r.kode_sales ?? r.code)
-          const branchCode = str(r.dist_code ?? r["dist code"])
+          const code = str(r.kode_sales ?? r.code)
+          const branchCode = str(r.dist_code)
           const branchName = branchCodeMap.get(norm(branchCode ?? "")) ?? str(r.dist_name ?? r.distributor ?? r.cabang ?? r.branch)
           const branchId = branchMap.get(norm(branchName ?? ""))
-          const aktif = norm(r.aktif ?? r.active ?? r["toko aktif (mtd)"])
+const aktif = norm(r.aktif ?? r.active ?? r["toko_aktif_(mtd)"])
           if (code && name) salesmanCodeMap.set(code.toLowerCase(), name)
           return {
             name,
@@ -303,13 +303,13 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
       const rows = payload.stores
         .map((r) => {
           const st = norm(r.status)
-          const salesmanCode = str(r["mtd sales code"] ?? r["mtd sales"] ?? r.sales ?? r.salesman ?? r["kode sales"])
-          const branchRef = str(r.distributor ?? r.dist_name ?? r["dist name"] ?? r.dist_code ?? r["dist code"] ?? r.cabang ?? r.branch)
+          const salesmanCode = str(r.mtd_sales_code ?? r.mtd_sales ?? r.sales ?? r.salesman ?? r.kode_sales)
+          const branchRef = str(r.distributor ?? r.dist_name ?? r.dist_code ?? r.cabang ?? r.branch)
           const salesmanName = salesmanCode ? salesmanCodeMap.get(salesmanCode.toLowerCase()) : null
           const branchKey = norm(branchRef ?? "")
           const branchId = branchMap.get(branchKey) ?? branchMap.get(norm(branchCodeMap.get(branchKey) ?? "")) ?? null
           return {
-            name: str(r.nama ?? r.name ?? r["kode toko"]),
+            name: str(r.nama ?? r.name ?? r.kode_toko),
             owner: str(r.pemilik ?? r.owner),
             address: str(r.alamat ?? r.address),
             province: str(r.provinsi ?? r.province) ?? "",
@@ -319,7 +319,7 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
             status: ["non-aktif", "nonaktif", "tidak aktif", "tidak", "inactive"].includes(st) ? "non-aktif" : "aktif",
             salesmanId: salesmanMap.get(norm(salesmanName ?? salesmanCode ?? r.sales ?? r.salesman)) ?? null,
             branchId,
-            lastOrderDate: toDate(r.tanggal_order_terakhir ?? r.last_order_date ?? r["tanggal order terakhir"]),
+            lastOrderDate: toDate(r.tanggal_order_terakhir ?? r.last_order_date ?? r.latest_order_date),
           }
         })
         .filter((r) => r.name && r.lat !== null && r.lng !== null) as {
@@ -387,22 +387,22 @@ export async function importData(payload: ImportPayload, clearFirst: boolean): P
     if (payload.sales?.length) {
       const rows = payload.sales
         .map((r) => {
-          const productRef = str(r["product code"] ?? r.product_code ?? r.produk ?? r.product ?? r.kode)
+          const productRef = str(r.product_code ?? r.produk ?? r.product ?? r.kode)
           const productName = productCodeMap.get(norm(productRef ?? "")) ?? productRef ?? ""
           const productId = productMap.get(norm(productName))
           const quantity = num(r.tonase ?? r.jumlah ?? r.quantity ?? r.qty ?? r.total_tonase) ?? 0
           const explicitAmount = num(r.nilai ?? r.amount ?? r.omzet ?? r.tonase)
           const price = productId ? (priceMap.get(productId) ?? 0) : 0
-          const salesmanCode = str(r.tdsalesmancode ?? r["tdsalesmancode"] ?? r.sales ?? r.salesman ?? r["sales code"])
+          const salesmanCode = str(r.tdsalesmancode ?? r.sales ?? r.salesman ?? r.sales_code)
           const salesmanId = salesmanMap.get(norm(salesmanCode ?? "")) ?? salesmanMap.get(norm(salesmanCodeMap.get(norm(salesmanCode ?? "")) ?? "")) ?? null
-          const storeRef = str(r.toko ?? r.store ?? r["customer code"] ?? r["customer"] ?? r.nama)
+          const storeRef = str(r.toko ?? r.store ?? r.customer_code ?? r.nama)
           return {
             salesmanId,
             storeId: storeMap.get(norm(storeRef ?? "")) ?? null,
             productId,
             quantity,
             amount: explicitAmount ?? quantity * price,
-            saleDate: toDate(r["do date"] ?? r.tanggal ?? r.sale_date ?? r.date ?? r["tanggal order terakhir"]) ?? new Date().toISOString().slice(0, 10),
+            saleDate: toDate(r.do_date ?? r.tanggal ?? r.sale_date ?? r.date ?? r.tanggal_order_terakhir) ?? new Date().toISOString().slice(0, 10),
           }
         })
         .filter((r) => r.salesmanId && r.storeId && r.productId && r.quantity > 0) as {
