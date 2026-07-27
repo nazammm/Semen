@@ -3,6 +3,7 @@
 import { db, pool } from "@/lib/db"
 import { branches, salesmen, products, stores, stock, sales } from "@/lib/db/schema"
 import { revalidatePath } from "next/cache"
+import { gunzipSync } from "zlib"
 
 /** A single row parsed from a sheet, keys already lowercased/trimmed. */
 type Row = Record<string, string | number | null | undefined>
@@ -156,6 +157,30 @@ export async function clearAllData(): Promise<{ ok: boolean; error?: string }> {
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Gagal menghapus data" }
+  }
+}
+
+/**
+ * Server Action yang menerima payload terkompresi (gzip + base64).
+ * Client mengompres payload JSON → gzip → base64 → kirim ke sini.
+ */
+export async function importDataCompressed(
+  compressedBase64: string,
+  clearFirst: boolean,
+): Promise<ImportResult> {
+  try {
+    const compressed = Buffer.from(compressedBase64, "base64")
+    const decompressed = gunzipSync(compressed)
+    const payload: ImportPayload = JSON.parse(decompressed.toString("utf-8"))
+    return importData(payload, clearFirst)
+  } catch (e) {
+    return {
+      ok: false,
+      cleared: false,
+      inserted: { branches: 0, products: 0, salesmen: 0, stores: 0, stock: 0, sales: 0 },
+      warnings: [],
+      error: e instanceof Error ? e.message : "Gagal mendekompres data",
+    }
   }
 }
 

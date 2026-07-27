@@ -1,26 +1,28 @@
-# ✅ DONE: Fix Import Excel Bugs
+# TODO: Fix Upload Limit 1MB ✅ SELESAI
 
-## ✅ Bug 1: Fix key references di `app/actions/import.ts`
-Semua `r["spasi"]` → `r.underscore` sudah di-fix:
-- ✅ `r["dist code"]` → `r.dist_code`
-- ✅ `r["kode sales"]` → `r.kode_sales`
-- ✅ `r["toko aktif (mtd)"]` → `r["toko_aktif_(mtd)"]`
-- ✅ `r["mtd sales code"]` → `r.mtd_sales_code`
-- ✅ `r["mtd sales"]` → `r.mtd_sales`
-- ✅ `r["dist name"]` → `r.dist_name`
-- ✅ `r["kode toko"]` → `r.kode_toko`
-- ✅ `r["tanggal order terakhir"]` → `r.tanggal_order_terakhir`
-- ✅ `r["customer code"]` → `r.customer_code`
-- ✅ `r["product code"]` → `r.product_code`
-- ✅ `r["do date"]` → `r.do_date`
-- ✅ `r["tdsalesmancode"]` → `r.tdsalesmancode`
-- ✅ `r["sales code"]` → `r.sales_code`
-- ✅ Menghapus `r["customer"]` (gak ada di template)
+## Ringkasan Perubahan
 
-## ✅ Bug 2: Branch/Distributor gak punya lat, lng, province, city
-- ✅ Default lat/lng ke 0 (jangan filter out)
-- ✅ Province/city tetap string kosong
+### Masalah
+Upload file Excel dibatasi 1MB karena Vercel Serverless Functions memiliki limit body size (~4.5MB), dan data JSON hasil parsing Excel bisa melebihi limit.
 
-## ✅ Deployment
-- ✅ Next build sukses (error font Google cuma masalah proxy lokal, di Vercel OK)
-- ✅ Push ke git siap deploy
+### Solusi
+**Kompresi GZIP** pada payload sebelum dikirim ke Server Action:
+
+| Komponen | Sebelum | Sesudah |
+|----------|---------|---------|
+| **Client (browser)** | Kirim JSON plain | Kompres JSON → gzip (CompressionStream API) → base64 |
+| **Server Action** | Terima JSON langsung | Terima base64 → dekompres (zlib.gunzipSync) → parse JSON |
+| **Dependency** | Tidak ada | Tidak ada (pakai API bawaan browser & Node.js) |
+
+### File yang diubah
+- ✅ `app/actions/import.ts` — Menambahkan `importDataCompressed()` yang menerima base64+gzip
+- ✅ `components/import/import-view.tsx` — Kompresi gzip sebelum kirim ke server
+- ✅ `next.config.mjs` — `serverActions.bodySizeLimit: "50mb"` (sudah ada sebelumnya)
+
+### Cara Kerja
+1. User pilih file Excel → parsing di browser (seperti biasa)
+2. Data dibagi chunk 200 baris → tiap chunk di-JSON.stringify
+3. JSON dikompres dengan `CompressionStream("gzip")` → base64
+4. Server Action menerima string base64 → dekompres dengan `zlib.gunzipSync` → parse JSON
+5. Proses import seperti biasa
+

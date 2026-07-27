@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback } from "react"
 import * as XLSX from "xlsx"
-import { importData, type ImportPayload, type ImportResult } from "@/app/actions/import"
+import { importDataCompressed, type ImportPayload, type ImportResult } from "@/app/actions/import"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -207,14 +207,43 @@ export function ImportView() {
         }
       }
 
-      // Send each sheet in chunks
+      // Send each sheet in chunks — compressed with gzip
       for (const key of order) {
         const rows = payload[key]
         if (!rows?.length) continue
         for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
           const chunk = rows.slice(i, i + CHUNK_SIZE)
           const partialPayload: ImportPayload = { [key]: chunk }
-          const res = await importData(partialPayload, false)
+
+          // Kompres payload JSON → gzip → base64 menggunakan CompressionStream API browser
+          const json = JSON.stringify(partialPayload)
+          const encoder = new TextEncoder()
+          const compressedStream = new CompressionStream("gzip")
+          const writer = compressedStream.writable.getWriter()
+          writer.write(encoder.encode(json))
+          writer.close()
+          const reader = compressedStream.readable.getReader()
+          const chunks: Uint8Array[] = []
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            chunks.push(value)
+          }
+          const totalLength = chunks.reduce((acc, c) => acc + c.length, 0)
+          const compressed = new Uint8Array(totalLength)
+          let offset = 0
+          for (const chunk of chunks) {
+            compressed.set(chunk, offset)
+            offset += chunk.length
+          }
+          // Convert to base64
+          let binary = ""
+          for (let i = 0; i < compressed.length; i++) {
+            binary += String.fromCharCode(compressed[i])
+          }
+          const base64 = btoa(binary)
+
+          const res = await importDataCompressed(base64, false)
           if (res.ok) {
             for (const [k, n] of Object.entries(res.inserted)) {
               totalInserted[k] = (totalInserted[k] ?? 0) + n
