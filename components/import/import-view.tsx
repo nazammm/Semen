@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useCallback } from "react"
 import * as XLSX from "xlsx"
 import { importData, type ImportPayload, type ImportResult } from "@/app/actions/import"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,6 +16,9 @@ import {
   Trash2,
   ArrowRight,
 } from "lucide-react"
+
+/** Max rows per chunk to keep each Server Action payload under limits. */
+const CHUNK_SIZE = 200
 
 /* Sheet definitions: template name + expected headers + example row. */
 const SHEETS: {
@@ -166,10 +169,79 @@ export function ImportView() {
     if (!payload) return
     setImporting(true)
     setResult(null)
+
+    const totalInserted: Record<string, number> = {
+      branches: 0,
+      products: 0,
+      salesmen: 0,
+      stores: 0,
+      stock: 0,
+      sales: 0,
+    }
+    const allWarnings: string[] = []
+    let lastError: string | undefined
+
+    const order: (keyof ImportPayload)[] = [
+      "branches",
+      "products",
+      "salesmen",
+      "stores",
+      "stock",
+      "sales",
+    ]
+
     try {
-      const res = await importData(payload, clearFirst)
-      setResult(res)
-      if (res.ok) {
+      // Clear once first if requested
+      if (clearFirst) {
+        const { clearAllData } = await import("@/app/actions/import")
+        const c = await clearAllData()
+        if (!c.ok) {
+          setResult({
+            ok: false,
+            cleared: false,
+            inserted: totalInserted,
+            warnings: allWarnings,
+            error: c.error,
+          })
+          return
+        }
+      }
+
+      // Send each sheet in chunks
+      for (const key of order) {
+        const rows = payload[key]
+        if (!rows?.length) continue
+        for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+          const chunk = rows.slice(i, i + CHUNK_SIZE)
+          const partialPayload: ImportPayload = { [key]: chunk }
+          const res = await importData(partialPayload, false)
+          if (res.ok) {
+            for (const [k, n] of Object.entries(res.inserted)) {
+              totalInserted[k] = (totalInserted[k] ?? 0) + n
+            }
+            allWarnings.push(...res.warnings)
+          } else {
+            lastError = res.error
+            // Flush any partial insert counts
+            for (const [k, n] of Object.entries(res.inserted)) {
+              totalInserted[k] = (totalInserted[k] ?? 0) + n
+            }
+            allWarnings.push(...res.warnings)
+            break // stop on first critical error
+          }
+        }
+        if (lastError) break
+      }
+
+      setResult({
+        ok: !lastError,
+        cleared: clearFirst,
+        inserted: totalInserted,
+        warnings: allWarnings,
+        error: lastError,
+      })
+
+      if (!lastError) {
         setPayload(null)
         setCounts({})
         setFileName(null)
