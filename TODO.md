@@ -1,28 +1,21 @@
-# TODO: Fix Upload Limit 1MB ✅ SELESAI
+# Perbaikan: Data Excel Tidak Muncul
 
-## Ringkasan Perubahan
+## Status Update
 
-### Masalah
-Upload file Excel dibatasi 1MB karena Vercel Serverless Functions memiliki limit body size (~4.5MB), dan data JSON hasil parsing Excel bisa melebihi limit.
+### ✅ Phase 1: Setup Database (SELESAI)
+- Koneksi Neon PostgreSQL sudah dikonfigurasi di `.env`
 
-### Solusi
-**Kompresi GZIP** pada payload sebelum dikirim ke Server Action:
+### ✅ Phase 2: Perbaikan Kode Import (SELESAI)
+- **Stores**: Province di-infer dari city jika tidak tersedia
+- **Stores**: Code mapping dengan `returning()` untuk store lookup
+- **Sales**: Customer Code numeric lookup via `storeCodeMap`
+- **Sales**: Amount fallback ke `quantity * 1_000_000` (estimasi)
 
-| Komponen | Sebelum | Sesudah |
-|----------|---------|---------|
-| **Client (browser)** | Kirim JSON plain | Kompres JSON → gzip (CompressionStream API) → base64 |
-| **Server Action** | Terima JSON langsung | Terima base64 → dekompres (zlib.gunzipSync) → parse JSON |
-| **Dependency** | Tidak ada | Tidak ada (pakai API bawaan browser & Node.js) |
+### ❌ Phase 3: (DIBATALKAN - tidak perlu)
+- Template Excel TIDAK perlu diubah, kode sudah kompatibel
 
-### File yang diubah
-- ✅ `app/actions/import.ts` — Menambahkan `importDataCompressed()` yang menerima base64+gzip
-- ✅ `components/import/import-view.tsx` — Kompresi gzip sebelum kirim ke server
-- ✅ `next.config.mjs` — `serverActions.bodySizeLimit: "50mb"` (sudah ada sebelumnya)
-
-### Cara Kerja
-1. User pilih file Excel → parsing di browser (seperti biasa)
-2. Data dibagi chunk 200 baris → tiap chunk di-JSON.stringify
-3. JSON dikompres dengan `CompressionStream("gzip")` → base64
-4. Server Action menerima string base64 → dekompres dengan `zlib.gunzipSync` → parse JSON
-5. Proses import seperti biasa
+### 🔄 Phase 4: Testing
+- [ ] Start dev server
+- [ ] Test import file Excel
+- [ ] Verifikasi data muncul di dashboard
 

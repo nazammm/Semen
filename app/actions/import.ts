@@ -324,21 +324,32 @@ const aktif = norm(r.aktif ?? r.active ?? r["toko_aktif_(mtd)"])
       salesmanMap.set(s.name.toLowerCase(), s.id)
       if (s.phone) salesmanMap.set(s.phone.toLowerCase(), s.id)
     }
+    // Map kode_toko → storeId for later Transaksi lookup
+    const storeCodeMap = new Map<string, number>()
     if (payload.stores?.length) {
-      const rows = payload.stores
+      // Pertama, collect semua kode_toko dari existing stores
+      for (const s of await db.select({ id: stores.id, name: stores.name }).from(stores)) {
+        // Will add code mapping after we know which is which
+      }
+      const processedRows = payload.stores
         .map((r) => {
           const st = norm(r.status)
+          const kode_toko = str(r.kode_toko ?? r.customer_code)
           const salesmanCode = str(r.mtd_sales_code ?? r.mtd_sales ?? r.sales ?? r.salesman ?? r.kode_sales)
           const branchRef = str(r.distributor ?? r.dist_name ?? r.dist_code ?? r.cabang ?? r.branch)
           const salesmanName = salesmanCode ? salesmanCodeMap.get(salesmanCode.toLowerCase()) : null
           const branchKey = norm(branchRef ?? "")
           const branchId = branchMap.get(branchKey) ?? branchMap.get(norm(branchCodeMap.get(branchKey) ?? "")) ?? null
+          // Toko sheet TIDAK punya kolom province, gunakan kota sebagai fallback
+          const city = str(r.kota ?? r.city) ?? ""
+          const province = (str(r.provinsi ?? r.province) ?? city) || "Unknown"
           return {
-            name: str(r.nama ?? r.name ?? r.kode_toko),
+            name: str(r.nama ?? r.name ?? kode_toko),
+            code: kode_toko,
             owner: str(r.pemilik ?? r.owner),
             address: str(r.alamat ?? r.address),
-            province: str(r.provinsi ?? r.province) ?? "",
-            city: str(r.kota ?? r.city) ?? "",
+            province,
+            city,
             lat: num(r.lat ?? r.latitude),
             lng: num(r.lng ?? r.longitude ?? r.long),
             status: ["non-aktif", "nonaktif", "tidak aktif", "tidak", "inactive"].includes(st) ? "non-aktif" : "aktif",
@@ -349,6 +360,7 @@ const aktif = norm(r.aktif ?? r.active ?? r["toko_aktif_(mtd)"])
         })
         .filter((r) => r.name && r.lat !== null && r.lng !== null) as {
         name: string
+        code: string | null
         owner: string | null
         address: string | null
         province: string
@@ -360,12 +372,43 @@ const aktif = norm(r.aktif ?? r.active ?? r["toko_aktif_(mtd)"])
         branchId: number | null
         lastOrderDate: string | null
       }[]
-      if (rows.length) {
-        await db.insert(stores).values(rows)
-        inserted.stores = rows.length
+      if (processedRows.length) {
+        // Insert and get back IDs via returning
+        try {
+          const insertedStores = await db.insert(stores).values(processedRows).returning({ id: stores.id, name: stores.name })
+          inserted.stores = insertedStores.length
+          // Map kode_toko → storeId using the returned IDs + original code from processedRows
+          for (const insertedStore of insertedStores) {
+            const matchedRow = processedRows.find(r => r.name === insertedStore.name)
+            if (matchedRow?.code) {
+              const code = matchedRow.code
+              storeCodeMap.set(code, insertedStore.id)
+              storeCodeMap.set(code.toLowerCase(), insertedStore.id)
+              // Also add numeric version if applicable
+              const numCode = Number(code)
+              if (!isNaN(numCode)) {
+                storeCodeMap.set(String(numCode), insertedStore.id)
+              }
+            }
+          }
+        } catch (e) {
+          // If returning() not supported, fallback to regular insert + re-read
+          await db.insert(stores).values(processedRows)
+          inserted.stores = processedRows.length
+          for (const s of await db.select({ id: stores.id, name: stores.name }).from(stores)) {
+            const matchedRow = processedRows.find(r => r.name === s.name)
+            if (matchedRow?.code) {
+              const code = matchedRow.code
+              storeCodeMap.set(code, s.id)
+              storeCodeMap.set(code.toLowerCase(), s.id)
+              const numCode = Number(code)
+              if (!isNaN(numCode)) storeCodeMap.set(String(numCode), s.id)
+            }
+          }
+        }
       }
-      if (rows.length !== payload.stores.length) {
-        warnings.push(`Toko: ${payload.stores.length - rows.length} baris dilewati (nama/koordinat kosong).`)
+      if (processedRows.length !== payload.stores.length) {
+        warnings.push(`Toko: ${payload.stores.length - processedRows.length} baris dilewati (nama/koordinat kosong).`)
       }
     }
 
@@ -416,17 +459,36 @@ const aktif = norm(r.aktif ?? r.active ?? r["toko_aktif_(mtd)"])
           const productName = productCodeMap.get(norm(productRef ?? "")) ?? productRef ?? ""
           const productId = productMap.get(norm(productName))
           const quantity = num(r.tonase ?? r.jumlah ?? r.quantity ?? r.qty ?? r.total_tonase) ?? 0
-          const explicitAmount = num(r.nilai ?? r.amount ?? r.omzet ?? r.tonase)
+          // Amount: jika ada nilai/omzet explicit, pakai itu. Tapi untuk dataset ini tonase adalah quantity × 1, jadi amount = quantity * 1_000_000 (estimasi)
+          // Biarkan default explicitAmount dari tonase, tapi tonase adalah quantity, bukan uang
+          const explicitAmount = num(r.nilai ?? r.amount ?? r.omzet)
           const price = productId ? (priceMap.get(productId) ?? 0) : 0
           const salesmanCode = str(r.tdsalesmancode ?? r.sales ?? r.salesman ?? r.sales_code)
           const salesmanId = salesmanMap.get(norm(salesmanCode ?? "")) ?? salesmanMap.get(norm(salesmanCodeMap.get(norm(salesmanCode ?? "")) ?? "")) ?? null
-          const storeRef = str(r.toko ?? r.store ?? r.customer_code ?? r.nama)
+          // Cari store: pertama cek customer_code (numeric) di storeCodeMap
+          const customerCode = str(r.customer_code ?? r.kode_toko)
+          const storeName = str(r.toko ?? r.store ?? r.nama)
+          let storeId: number | null = null
+          if (customerCode) {
+            // Coba exact match dulu
+            storeId = storeCodeMap.get(customerCode) ?? storeCodeMap.get(customerCode.toLowerCase()) ?? null
+          }
+          if (!storeId && storeName) {
+            storeId = storeMap.get(norm(storeName)) ?? null
+          }
+          if (!storeId && customerCode) {
+            // Coba numeric lookup (kalo customer_code numeric string seperti "7513")
+            const numericCode = customerCode.replace(/[^0-9]/g, '')
+            if (numericCode) storeId = storeCodeMap.get(numericCode) ?? null
+          }
           return {
             salesmanId,
-            storeId: storeMap.get(norm(storeRef ?? "")) ?? null,
+            storeId,
             productId,
             quantity,
-            amount: explicitAmount ?? quantity * price,
+            // Untuk dataset ini, amount = quantity * 1_000_000 (estimasi harga per ton ~1jt)
+            // Tapi prioritaskan explicit amount jika ada
+            amount: explicitAmount ?? quantity * (price || 1_000_000),
             saleDate: toDate(r.do_date ?? r.tanggal ?? r.sale_date ?? r.date ?? r.tanggal_order_terakhir) ?? new Date().toISOString().slice(0, 10),
           }
         })
